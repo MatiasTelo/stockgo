@@ -12,6 +12,7 @@ type CancelReservationHandler struct {
 type CancelReservationRequest struct {
 	ArticleID string `json:"article_id" validate:"required"`
 	OrderID   string `json:"order_id" validate:"required"`
+	Quantity  int    `json:"quantity" validate:"min=1"`
 }
 
 func NewCancelReservationHandler(stockService *service.StockService) *CancelReservationHandler {
@@ -44,14 +45,20 @@ func (h *CancelReservationHandler) Handle(c *fiber.Ctx) error {
 		})
 	}
 
-	err := h.stockService.CancelReservation(c.Context(), req.OrderID, req.ArticleID)
+	if req.Quantity <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "quantity must be greater than 0",
+		})
+	}
+
+	err := h.stockService.CancelReservation(c.Context(), req.OrderID, req.ArticleID, req.Quantity)
 	if err != nil {
 		if len(err.Error()) > 20 && err.Error()[:20] == "reservation not found:" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Reservation not found",
 			})
 		}
-		
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to cancel reservation",
 			"details": err.Error(),
@@ -88,14 +95,31 @@ func (h *CancelReservationHandler) HandleByPath(c *fiber.Ctx) error {
 		})
 	}
 
-	err := h.stockService.CancelReservation(c.Context(), orderID, articleID)
+	var req struct {
+		Quantity int `json:"quantity" validate:"min=1"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "Invalid request body. Quantity is required",
+			"details": err.Error(),
+		})
+	}
+
+	if req.Quantity <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "quantity must be greater than 0",
+		})
+	}
+
+	err := h.stockService.CancelReservation(c.Context(), orderID, articleID, req.Quantity)
 	if err != nil {
 		if len(err.Error()) > 20 && err.Error()[:20] == "reservation not found:" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Reservation not found",
 			})
 		}
-		
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to cancel reservation",
 			"details": err.Error(),
@@ -120,6 +144,7 @@ func (h *CancelReservationHandler) ConfirmReservation(c *fiber.Ctx) error {
 	var req struct {
 		ArticleID string `json:"article_id" validate:"required"`
 		OrderID   string `json:"order_id" validate:"required"`
+		Quantity  int    `json:"quantity" validate:"min=1"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -142,14 +167,20 @@ func (h *CancelReservationHandler) ConfirmReservation(c *fiber.Ctx) error {
 		})
 	}
 
-	err := h.stockService.ConfirmReservation(c.Context(), req.OrderID, req.ArticleID)
+	if req.Quantity <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "quantity must be greater than 0",
+		})
+	}
+
+	err := h.stockService.ConfirmReservation(c.Context(), req.OrderID, req.ArticleID, req.Quantity)
 	if err != nil {
 		if len(err.Error()) > 20 && err.Error()[:20] == "reservation not found:" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Reservation not found",
 			})
 		}
-		
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to confirm reservation",
 			"details": err.Error(),
@@ -186,14 +217,31 @@ func (h *CancelReservationHandler) ConfirmReservationByPath(c *fiber.Ctx) error 
 		})
 	}
 
-	err := h.stockService.ConfirmReservation(c.Context(), orderID, articleID)
+	var req struct {
+		Quantity int `json:"quantity" validate:"min=1"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "Invalid request body. Quantity is required",
+			"details": err.Error(),
+		})
+	}
+
+	if req.Quantity <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "quantity must be greater than 0",
+		})
+	}
+
+	err := h.stockService.ConfirmReservation(c.Context(), orderID, articleID, req.Quantity)
 	if err != nil {
 		if len(err.Error()) > 20 && err.Error()[:20] == "reservation not found:" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Reservation not found",
 			})
 		}
-		
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to confirm reservation",
 			"details": err.Error(),

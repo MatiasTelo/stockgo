@@ -9,9 +9,8 @@ import (
 )
 
 type StockService struct {
-	stockRepo       *repository.StockRepository
-	eventRepo       *repository.StockEventRepository
-	reservationRepo *repository.ReservationRepository
+	stockRepo        *repository.StockRepository
+	eventRepo        *repository.StockEventRepository
 	messagingService MessagePublisher
 }
 
@@ -22,13 +21,11 @@ type MessagePublisher interface {
 func NewStockService(
 	stockRepo *repository.StockRepository,
 	eventRepo *repository.StockEventRepository,
-	reservationRepo *repository.ReservationRepository,
 	messagingService MessagePublisher,
 ) *StockService {
 	return &StockService{
-		stockRepo:       stockRepo,
-		eventRepo:       eventRepo,
-		reservationRepo: reservationRepo,
+		stockRepo:        stockRepo,
+		eventRepo:        eventRepo,
 		messagingService: messagingService,
 	}
 }
@@ -142,19 +139,6 @@ func (s *StockService) ReserveStock(ctx context.Context, req *models.ReserveStoc
 		return fmt.Errorf("error reserving stock: %w", err)
 	}
 
-	// Crear reserva en la tabla de reservas
-	reservation := &models.StockReservation{
-		ArticleID: req.ArticleID,
-		OrderID:   req.OrderID,
-		Quantity:  req.Quantity,
-	}
-
-	if err := s.reservationRepo.CreateReservation(ctx, reservation); err != nil {
-		// Si falla crear la reserva, intentar deshacer la reserva de stock
-		s.stockRepo.CancelReservation(ctx, req.ArticleID, req.Quantity)
-		return fmt.Errorf("error creating reservation record: %w", err)
-	}
-
 	// Crear evento de stock
 	event := &models.StockEvent{
 		ArticleID: req.ArticleID,
@@ -171,21 +155,10 @@ func (s *StockService) ReserveStock(ctx context.Context, req *models.ReserveStoc
 	return nil
 }
 
-// CancelReservation cancela una reserva de stock
-func (s *StockService) CancelReservation(ctx context.Context, orderID, articleID string) error {
-	// Obtener la reserva
-	reservation, err := s.reservationRepo.GetReservationByOrderAndArticle(ctx, orderID, articleID)
-	if err != nil {
-		return fmt.Errorf("reservation not found: %w", err)
-	}
-
-	// Actualizar estado de la reserva
-	if err := s.reservationRepo.UpdateReservationStatus(ctx, reservation.ID, models.ReservationStatusCancelled); err != nil {
-		return fmt.Errorf("error updating reservation status: %w", err)
-	}
-
+// CancelReservation cancela una reserva de stock usando solo eventos
+func (s *StockService) CancelReservation(ctx context.Context, orderID, articleID string, quantity int) error {
 	// Liberar el stock reservado
-	if err := s.stockRepo.CancelReservation(ctx, articleID, reservation.Quantity); err != nil {
+	if err := s.stockRepo.CancelReservation(ctx, articleID, quantity); err != nil {
 		return fmt.Errorf("error canceling stock reservation: %w", err)
 	}
 
@@ -193,7 +166,7 @@ func (s *StockService) CancelReservation(ctx context.Context, orderID, articleID
 	event := &models.StockEvent{
 		ArticleID: articleID,
 		EventType: models.EventTypeCancelReserve,
-		Quantity:  reservation.Quantity,
+		Quantity:  quantity,
 		OrderID:   &orderID,
 		Reason:    fmt.Sprintf("Reserva cancelada para orden %s", orderID),
 	}
@@ -205,29 +178,18 @@ func (s *StockService) CancelReservation(ctx context.Context, orderID, articleID
 	return nil
 }
 
-// ConfirmReservation confirma una reserva y descuenta el stock
-func (s *StockService) ConfirmReservation(ctx context.Context, orderID, articleID string) error {
-	// Obtener la reserva
-	reservation, err := s.reservationRepo.GetReservationByOrderAndArticle(ctx, orderID, articleID)
-	if err != nil {
-		return fmt.Errorf("reservation not found: %w", err)
-	}
-
+// ConfirmReservation confirma una reserva y descuenta el stock usando solo eventos
+func (s *StockService) ConfirmReservation(ctx context.Context, orderID, articleID string, quantity int) error {
 	// Confirmar la reserva (descontar stock)
-	if err := s.stockRepo.ConfirmReservation(ctx, articleID, reservation.Quantity); err != nil {
+	if err := s.stockRepo.ConfirmReservation(ctx, articleID, quantity); err != nil {
 		return fmt.Errorf("error confirming reservation: %w", err)
-	}
-
-	// Actualizar estado de la reserva
-	if err := s.reservationRepo.UpdateReservationStatus(ctx, reservation.ID, models.ReservationStatusConfirmed); err != nil {
-		return fmt.Errorf("error updating reservation status: %w", err)
 	}
 
 	// Crear evento de stock
 	event := &models.StockEvent{
 		ArticleID: articleID,
 		EventType: models.EventTypeDeduct,
-		Quantity:  reservation.Quantity,
+		Quantity:  quantity,
 		OrderID:   &orderID,
 		Reason:    fmt.Sprintf("Stock descontado por confirmación de orden %s", orderID),
 	}

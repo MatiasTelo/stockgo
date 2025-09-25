@@ -50,10 +50,9 @@ func main() {
 	// Crear repositorios
 	stockRepo := repository.NewStockRepository(db.PG, db.Redis)
 	eventRepo := repository.NewStockEventRepository(db.PG)
-	reservationRepo := repository.NewReservationRepository(db.PG)
 
 	// Crear servicios
-	stockService := service.NewStockService(stockRepo, eventRepo, reservationRepo, rabbitMQ)
+	stockService := service.NewStockService(stockRepo, eventRepo, rabbitMQ)
 
 	// Crear handlers
 	addArticleHandler := handlers.NewAddArticleHandler(stockService)

@@ -18,23 +18,34 @@ type RabbitMQService struct {
 }
 
 type OrderCreatedMessage struct {
-	OrderID   string                 `json:"order_id"`
-	Items     []OrderItem            `json:"items"`
-	Status    string                 `json:"status"`
-	CreatedAt time.Time              `json:"created_at"`
+	OrderID   string      `json:"order_id"`
+	Items     []OrderItem `json:"items"`
+	Status    string      `json:"status"`
+	CreatedAt time.Time   `json:"created_at"`
 }
 
 type OrderItem struct {
-	ArticleID string `json:"article_id"`
-	Quantity  int    `json:"quantity"`
+	ArticleID string  `json:"article_id"`
+	Quantity  int     `json:"quantity"`
 	Price     float64 `json:"price"`
 }
 
 type OrderStatusChangedMessage struct {
-	OrderID   string    `json:"order_id"`
-	Status    string    `json:"status"` // CONFIRMED, CANCELLED
-	UpdatedAt time.Time `json:"updated_at"`
+	OrderID   string      `json:"order_id"`
 	Items     []OrderItem `json:"items,omitempty"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+type OrderConfirmedMessage struct {
+	OrderID   string      `json:"order_id"`
+	Items     []OrderItem `json:"items"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+type OrderCancelledMessage struct {
+	OrderID   string      `json:"order_id"`
+	Items     []OrderItem `json:"items"`
+	UpdatedAt time.Time   `json:"updated_at"`
 }
 
 type LowStockAlertMessage struct {
@@ -103,9 +114,9 @@ func (r *RabbitMQService) setupExchangesAndQueues() error {
 
 	// Bind para órdenes creadas
 	err = r.channel.QueueBind(
-		orderQueue,               // queue name
-		"order.created",          // routing key
-		r.config.Exchange,        // exchange
+		orderQueue,        // queue name
+		"order.created",   // routing key
+		r.config.Exchange, // exchange
 		false,
 		nil,
 	)
@@ -113,16 +124,28 @@ func (r *RabbitMQService) setupExchangesAndQueues() error {
 		return fmt.Errorf("failed to bind order created queue: %w", err)
 	}
 
-	// Bind para cambios de estado de órdenes
+	// Bind para órdenes confirmadas
 	err = r.channel.QueueBind(
-		orderQueue,               // queue name
-		"order.status.changed",   // routing key
-		r.config.Exchange,        // exchange
+		orderQueue,        // queue name
+		"order.confirmed", // routing key
+		r.config.Exchange, // exchange
 		false,
 		nil,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to bind order status queue: %w", err)
+		return fmt.Errorf("failed to bind order confirmed queue: %w", err)
+	}
+
+	// Bind para órdenes canceladas
+	err = r.channel.QueueBind(
+		orderQueue,        // queue name
+		"order.cancelled", // routing key
+		r.config.Exchange, // exchange
+		false,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to bind order cancelled queue: %w", err)
 	}
 
 	// Cola para alertas de stock bajo
@@ -158,10 +181,10 @@ func (r *RabbitMQService) PublishLowStockAlert(ctx context.Context, articleID st
 
 	err = r.channel.PublishWithContext(
 		ctx,
-		r.config.Exchange,     // exchange
-		"stock.alert.low",     // routing key
-		false,                 // mandatory
-		false,                 // immediate
+		r.config.Exchange, // exchange
+		"stock.alert.low", // routing key
+		false,             // mandatory
+		false,             // immediate
 		amqp091.Publishing{
 			ContentType:  "application/json",
 			DeliveryMode: amqp091.Persistent,
@@ -174,7 +197,7 @@ func (r *RabbitMQService) PublishLowStockAlert(ctx context.Context, articleID st
 		return fmt.Errorf("failed to publish low stock alert: %w", err)
 	}
 
-	log.Printf("Published low stock alert for article %s (current: %d, min: %d)", 
+	log.Printf("Published low stock alert for article %s (current: %d, min: %d)",
 		articleID, currentQuantity, minStock)
 	return nil
 }
@@ -229,23 +252,37 @@ func (r *RabbitMQService) handleOrderMessage(msg amqp091.Delivery, handler Order
 			msg.Nack(false, false)
 			return
 		}
-		
+
 		if err := handler.HandleOrderCreated(context.Background(), &orderMsg); err != nil {
 			log.Printf("Failed to handle order created: %v", err)
 			msg.Nack(false, true) // Requeue for retry
 			return
 		}
 
-	case "order.status.changed":
-		var statusMsg OrderStatusChangedMessage
-		if err := json.Unmarshal(msg.Body, &statusMsg); err != nil {
-			log.Printf("Failed to unmarshal order status message: %v", err)
+	case "order.confirmed":
+		var confirmedMsg OrderConfirmedMessage
+		if err := json.Unmarshal(msg.Body, &confirmedMsg); err != nil {
+			log.Printf("Failed to unmarshal order confirmed message: %v", err)
 			msg.Nack(false, false)
 			return
 		}
-		
-		if err := handler.HandleOrderStatusChanged(context.Background(), &statusMsg); err != nil {
-			log.Printf("Failed to handle order status change: %v", err)
+
+		if err := handler.HandleOrderConfirmed(context.Background(), &confirmedMsg); err != nil {
+			log.Printf("Failed to handle order confirmed: %v", err)
+			msg.Nack(false, true) // Requeue for retry
+			return
+		}
+
+	case "order.cancelled":
+		var cancelledMsg OrderCancelledMessage
+		if err := json.Unmarshal(msg.Body, &cancelledMsg); err != nil {
+			log.Printf("Failed to unmarshal order cancelled message: %v", err)
+			msg.Nack(false, false)
+			return
+		}
+
+		if err := handler.HandleOrderCancelled(context.Background(), &cancelledMsg); err != nil {
+			log.Printf("Failed to handle order cancelled: %v", err)
 			msg.Nack(false, true) // Requeue for retry
 			return
 		}
@@ -262,7 +299,8 @@ func (r *RabbitMQService) handleOrderMessage(msg amqp091.Delivery, handler Order
 // OrderEventHandler define la interfaz para manejar eventos de órdenes
 type OrderEventHandler interface {
 	HandleOrderCreated(ctx context.Context, order *OrderCreatedMessage) error
-	HandleOrderStatusChanged(ctx context.Context, status *OrderStatusChangedMessage) error
+	HandleOrderConfirmed(ctx context.Context, order *OrderConfirmedMessage) error
+	HandleOrderCancelled(ctx context.Context, order *OrderCancelledMessage) error
 }
 
 // Close cierra la conexión

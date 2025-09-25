@@ -1,0 +1,488 @@
+{
+	"info": {
+		"_postman_id": "stockgo-microservice-tests",
+		"name": "StockGO Microservice Tests",
+		"description": "Collection completa para probar el microservicio de stock management",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "article_id",
+			"value": "ART-001",
+			"type": "string"
+		},
+		{
+			"key": "order_id",
+			"value": "ORDER-001",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/health",
+					"host": ["{{base_url}}"],
+					"path": ["health"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "1. Add Article",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Response contains success message', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"article_id\": \"{{article_id}}\",\n    \"name\": \"Producto de Prueba\",\n    \"description\": \"Descripción del producto de prueba\",\n    \"initial_stock\": 100,\n    \"min_stock\": 10,\n    \"max_stock\": 500,\n    \"unit_price\": 25.50,\n    \"location\": \"A1-B2-C3\",\n    \"metadata\": {\n        \"category\": \"electronics\",\n        \"supplier\": \"Supplier ABC\",\n        \"weight\": \"0.5kg\"\n    }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/stock/articles",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "articles"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Get Article Stock",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response contains stock info', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('article_id');",
+							"    pm.expect(jsonData).to.have.property('current_stock');",
+							"    pm.expect(jsonData).to.have.property('available_stock');",
+							"    pm.expect(jsonData).to.have.property('reserved_stock');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/stock/{{article_id}}",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "{{article_id}}"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Replenish Stock",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Stock was replenished', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"    pm.expect(jsonData).to.have.property('new_stock');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"article_id\": \"{{article_id}}\",\n    \"quantity\": 50,\n    \"reason\": \"Reabastecimiento mensual\",\n    \"supplier\": \"Supplier ABC\",\n    \"batch_number\": \"BATCH-2025-001\",\n    \"expiration_date\": \"2026-09-25T00:00:00Z\",\n    \"metadata\": {\n        \"purchase_order\": \"PO-2025-001\",\n        \"cost_per_unit\": 20.00\n    }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/stock/replenish",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "replenish"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Reserve Stock",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Stock was reserved', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"    pm.expect(jsonData).to.have.property('reserved_until');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"article_id\": \"{{article_id}}\",\n    \"quantity\": 20,\n    \"order_id\": \"{{order_id}}\",\n    \"customer_id\": \"CUSTOMER-001\",\n    \"expiration_minutes\": 30,\n    \"metadata\": {\n        \"sales_channel\": \"web\",\n        \"priority\": \"normal\"\n    }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/stock/reserve",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "reserve"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "5. Check Stock After Reserve",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Stock shows reservation', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.reserved_stock).to.be.greaterThan(0);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/stock/{{article_id}}",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "{{article_id}}"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "6. Deduct Stock",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Stock was deducted', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"    pm.expect(jsonData).to.have.property('new_stock');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"article_id\": \"{{article_id}}\",\n    \"quantity\": 10,\n    \"reason\": \"Venta directa\",\n    \"transaction_id\": \"TXN-001\",\n    \"customer_id\": \"CUSTOMER-002\",\n    \"metadata\": {\n        \"sales_channel\": \"store\",\n        \"cashier_id\": \"CASHIER-001\"\n    }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/stock/deduct",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "deduct"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "7. Cancel Reservation",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Reservation was cancelled', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"order_id\": \"{{order_id}}\",\n    \"article_id\": \"{{article_id}}\",\n    \"quantity\": 20,\n    \"reason\": \"Order cancelled by customer\",\n    \"metadata\": {\n        \"cancelled_by\": \"customer\",\n        \"reason_code\": \"customer_request\"\n    }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/stock/cancel-reservation",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "cancel-reservation"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "8. Check Low Stock Items",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response is array', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.be.an('array');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/stock/low-stock?threshold=50",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "low-stock"],
+					"query": [
+						{
+							"key": "threshold",
+							"value": "50"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "9. Reserve Stock for Second Order",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Stock was reserved', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"article_id\": \"{{article_id}}\",\n    \"quantity\": 15,\n    \"order_id\": \"ORDER-002\",\n    \"customer_id\": \"CUSTOMER-003\",\n    \"expiration_minutes\": 60,\n    \"metadata\": {\n        \"sales_channel\": \"mobile\",\n        \"priority\": \"high\"\n    }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/stock/reserve",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "reserve"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "10. Final Stock Check",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Stock levels are consistent', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.current_stock).to.equal(jsonData.available_stock + jsonData.reserved_stock);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/stock/{{article_id}}",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "{{article_id}}"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Error Cases - Invalid Article ID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 404', function () {",
+							"    pm.response.to.have.status(404);",
+							"});",
+							"",
+							"pm.test('Response contains error message', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('error');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/stock/INVALID-ARTICLE",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "INVALID-ARTICLE"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Error Cases - Insufficient Stock",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 400', function () {",
+							"    pm.response.to.have.status(400);",
+							"});",
+							"",
+							"pm.test('Response contains error about insufficient stock', function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('error');",
+							"    pm.expect(jsonData.error.toLowerCase()).to.include('insufficient');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"article_id\": \"{{article_id}}\",\n    \"quantity\": 99999,\n    \"order_id\": \"ORDER-FAIL\",\n    \"customer_id\": \"CUSTOMER-FAIL\",\n    \"expiration_minutes\": 30\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/stock/reserve",
+					"host": ["{{base_url}}"],
+					"path": ["api", "stock", "reserve"]
+				}
+			},
+			"response": []
+		}
+	]
+}
