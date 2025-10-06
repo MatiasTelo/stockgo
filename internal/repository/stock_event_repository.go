@@ -26,7 +26,7 @@ func (r *StockEventRepository) CreateStockEvent(ctx context.Context, event *mode
 		INSERT INTO stock_events (id, article_id, event_type, quantity, order_id, reason, metadata, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
-	
+
 	event.ID = uuid.New()
 	event.CreatedAt = time.Now()
 
@@ -56,7 +56,7 @@ func (r *StockEventRepository) GetStockEventsByArticleID(ctx context.Context, ar
 		ORDER BY created_at DESC
 		LIMIT $2
 	`
-	
+
 	rows, err := r.db.Query(ctx, query, articleID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("error querying stock events: %w", err)
@@ -86,7 +86,7 @@ func (r *StockEventRepository) GetStockEventsByOrderID(ctx context.Context, orde
 		WHERE order_id = $1
 		ORDER BY created_at DESC
 	`
-	
+
 	rows, err := r.db.Query(ctx, query, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("error querying stock events by order: %w", err)
@@ -116,7 +116,7 @@ func (r *StockEventRepository) GetAllStockEvents(ctx context.Context, offset, li
 		ORDER BY created_at DESC
 		OFFSET $1 LIMIT $2
 	`
-	
+
 	rows, err := r.db.Query(ctx, query, offset, limit)
 	if err != nil {
 		return nil, fmt.Errorf("error querying stock events: %w", err)
@@ -136,4 +136,28 @@ func (r *StockEventRepository) GetAllStockEvents(ctx context.Context, offset, li
 	}
 
 	return events, nil
+}
+
+// HasActiveReservation verifica si existe una reserva activa para un order_id
+func (r *StockEventRepository) HasActiveReservation(ctx context.Context, orderID string) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM stock_events 
+			WHERE order_id = $1 AND event_type = 'RESERVE'
+			AND NOT EXISTS(
+				SELECT 1 FROM stock_events se2 
+				WHERE se2.order_id = $1 
+				AND se2.event_type IN ('CANCEL_RESERVE', 'CONFIRM_RESERVE')
+				AND se2.created_at > stock_events.created_at
+			)
+		)
+	`
+
+	var exists bool
+	err := r.db.QueryRow(ctx, query, orderID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("error checking active reservation: %w", err)
+	}
+
+	return exists, nil
 }

@@ -48,18 +48,7 @@ Content-Type: application/json
 }
 ```
 
-### 7. Reabastecer Stock (Por URL)
-```http
-PUT http://localhost:8080/api/stock/articles/ART-001/replenish
-Content-Type: application/json
-
-{
-    "quantity": 25,
-    "reason": "Restock urgente"
-}
-```
-
-### 8. Deducir Stock (JSON)
+### 7. Deducir Stock (JSON)
 ```http
 PUT http://localhost:8080/api/stock/deduct
 Content-Type: application/json
@@ -71,18 +60,7 @@ Content-Type: application/json
 }
 ```
 
-### 9. Deducir Stock (Por URL)
-```http
-PUT http://localhost:8080/api/stock/articles/ART-001/deduct
-Content-Type: application/json
-
-{
-    "quantity": 5,
-    "reason": "Muestra de producto"
-}
-```
-
-### 10. Reservar Stock (JSON)
+### 8. Reservar Stock (JSON)
 ```http
 POST http://localhost:8080/api/stock/reserve
 Content-Type: application/json
@@ -94,18 +72,7 @@ Content-Type: application/json
 }
 ```
 
-### 11. Reservar Stock (Por URL)
-```http
-POST http://localhost:8080/api/stock/articles/ART-001/reserve
-Content-Type: application/json
-
-{
-    "quantity": 2,
-    "order_id": "ORDER-456"
-}
-```
-
-### 12. Cancelar Reserva (JSON)
+### 9. Cancelar Reserva (JSON)
 ```http
 DELETE http://localhost:8080/api/stock/reservations
 Content-Type: application/json
@@ -118,18 +85,7 @@ Content-Type: application/json
 }
 ```
 
-### 13. Cancelar Reserva (Por URL)
-```http
-DELETE http://localhost:8080/api/stock/orders/ORDER-456/reservations/ART-001
-Content-Type: application/json
-
-{
-    "quantity": 2,
-    "reason": "Timeout de reserva"
-}
-```
-
-### 14. Confirmar Reserva (JSON)
+### 10. Confirmar Reserva (JSON)
 ```http
 POST http://localhost:8080/api/stock/reservations/confirm
 Content-Type: application/json
@@ -142,23 +98,12 @@ Content-Type: application/json
 }
 ```
 
-### 15. Confirmar Reserva (Por URL)
-```http
-POST http://localhost:8080/api/stock/orders/ORDER-789/reservations/ART-001/confirm
-Content-Type: application/json
-
-{
-    "quantity": 3,
-    "reason": "Procesamiento de pago exitoso"
-}
-```
-
-### 16. Consultar Artículos con Bajo Stock
+### 11. Consultar Artículos con Bajo Stock
 ```http
 GET http://localhost:8080/api/stock/low-stock
 ```
 
-### 17. Obtener Resumen de Alertas
+### 12. Obtener Resumen de Alertas
 ```http
 GET http://localhost:8080/api/stock/alerts/summary
 ```

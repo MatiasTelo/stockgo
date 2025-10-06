@@ -57,7 +57,7 @@ func (h *ReplenishStockHandler) Handle(c *fiber.Ctx) error {
 				"error": "Article not found",
 			})
 		}
-		
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to replenish stock",
 			"details": err.Error(),
@@ -69,63 +69,6 @@ func (h *ReplenishStockHandler) Handle(c *fiber.Ctx) error {
 		"data":    stock,
 		"replenished": fiber.Map{
 			"article_id": req.ArticleID,
-			"quantity":   req.Quantity,
-			"reason":     req.Reason,
-		},
-	})
-}
-
-// PUT /api/stock/articles/:articleId/replenish
-func (h *ReplenishStockHandler) HandleByPath(c *fiber.Ctx) error {
-	articleID := c.Params("articleId")
-	if articleID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "article_id is required",
-		})
-	}
-
-	var req struct {
-		Quantity int    `json:"quantity" validate:"min=1"`
-		Reason   string `json:"reason"`
-	}
-
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   "Invalid request body",
-			"details": err.Error(),
-		})
-	}
-
-	if req.Quantity <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "quantity must be greater than 0",
-		})
-	}
-
-	// Set default reason if not provided
-	if req.Reason == "" {
-		req.Reason = "Stock replenishment"
-	}
-
-	stock, err := h.stockService.ReplenishStock(c.Context(), articleID, req.Quantity, req.Reason)
-	if err != nil {
-		if err.Error() == "article not found: stock not found for article_id: "+articleID {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Article not found",
-			})
-		}
-		
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Failed to replenish stock",
-			"details": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"message": "Stock replenished successfully",
-		"data":    stock,
-		"replenished": fiber.Map{
-			"article_id": articleID,
 			"quantity":   req.Quantity,
 			"reason":     req.Reason,
 		},

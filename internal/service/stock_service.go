@@ -134,6 +134,16 @@ func (s *StockService) DeductStock(ctx context.Context, articleID string, quanti
 
 // ReserveStock reserva una cantidad de stock para una orden
 func (s *StockService) ReserveStock(ctx context.Context, req *models.ReserveStockRequest) error {
+	// Verificar si ya existe una reserva activa para este order_id
+	hasReservation, err := s.eventRepo.HasActiveReservation(ctx, req.OrderID)
+	if err != nil {
+		return fmt.Errorf("error checking existing reservations: %w", err)
+	}
+
+	if hasReservation {
+		return fmt.Errorf("order %s already has an active reservation", req.OrderID)
+	}
+
 	// Verificar que hay stock suficiente y reservarlo
 	if err := s.stockRepo.ReserveStock(ctx, req.ArticleID, req.Quantity); err != nil {
 		return fmt.Errorf("error reserving stock: %w", err)

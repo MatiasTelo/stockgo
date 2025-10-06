@@ -112,20 +112,15 @@ func main() {
 
 	// Stock operations routes
 	v1.Put("/replenish", replenishHandler.Handle)
-	v1.Put("/articles/:articleId/replenish", replenishHandler.HandleByPath)
 
 	v1.Put("/deduct", deductHandler.Handle)
-	v1.Put("/articles/:articleId/deduct", deductHandler.HandleByPath)
 
 	// Reservation routes
 	v1.Post("/reserve", reserveHandler.Handle)
-	v1.Post("/articles/:articleId/reserve", reserveHandler.HandleByPath)
 
 	v1.Delete("/reservations", cancelHandler.Handle)
-	v1.Delete("/orders/:orderId/reservations/:articleId", cancelHandler.HandleByPath)
 
 	v1.Post("/reservations/confirm", cancelHandler.ConfirmReservation)
-	v1.Post("/orders/:orderId/reservations/:articleId/confirm", cancelHandler.ConfirmReservationByPath)
 
 	// Low stock and alerts routes
 	v1.Get("/low-stock", lowStockHandler.Handle)
