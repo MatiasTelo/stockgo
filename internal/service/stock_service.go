@@ -165,58 +165,6 @@ func (s *StockService) ReserveStock(ctx context.Context, req *models.ReserveStoc
 	return nil
 }
 
-// CancelReservation cancela una reserva de stock usando solo eventos
-func (s *StockService) CancelReservation(ctx context.Context, orderID, articleID string, quantity int) error {
-	// Liberar el stock reservado
-	if err := s.stockRepo.CancelReservation(ctx, articleID, quantity); err != nil {
-		return fmt.Errorf("error canceling stock reservation: %w", err)
-	}
-
-	// Crear evento de stock
-	event := &models.StockEvent{
-		ArticleID: articleID,
-		EventType: models.EventTypeCancelReserve,
-		Quantity:  quantity,
-		OrderID:   &orderID,
-		Reason:    fmt.Sprintf("Reserva cancelada para orden %s", orderID),
-	}
-
-	if err := s.eventRepo.CreateStockEvent(ctx, event); err != nil {
-		fmt.Printf("Warning: Could not create stock event: %v\n", err)
-	}
-
-	return nil
-}
-
-// ConfirmReservation confirma una reserva y descuenta el stock usando solo eventos
-func (s *StockService) ConfirmReservation(ctx context.Context, orderID, articleID string, quantity int) error {
-	// Confirmar la reserva (descontar stock)
-	if err := s.stockRepo.ConfirmReservation(ctx, articleID, quantity); err != nil {
-		return fmt.Errorf("error confirming reservation: %w", err)
-	}
-
-	// Crear evento de stock
-	event := &models.StockEvent{
-		ArticleID: articleID,
-		EventType: models.EventTypeDeduct,
-		Quantity:  quantity,
-		OrderID:   &orderID,
-		Reason:    fmt.Sprintf("Stock descontado por confirmación de orden %s", orderID),
-	}
-
-	if err := s.eventRepo.CreateStockEvent(ctx, event); err != nil {
-		fmt.Printf("Warning: Could not create stock event: %v\n", err)
-	}
-
-	// Verificar si el stock está bajo después de la confirmación
-	stock, _ := s.stockRepo.GetStockByArticleID(ctx, articleID)
-	if stock != nil && stock.IsLowStock() {
-		s.messagingService.PublishLowStockAlert(ctx, articleID, stock.Quantity, stock.MinStock)
-	}
-
-	return nil
-}
-
 // GetStock obtiene información de stock por artículo
 func (s *StockService) GetStock(ctx context.Context, articleID string) (*models.Stock, error) {
 	return s.stockRepo.GetStockByArticleID(ctx, articleID)
@@ -238,4 +186,136 @@ func (s *StockService) GetStockEvents(ctx context.Context, articleID string, lim
 // GetLowStocks obtiene artículos con stock bajo
 func (s *StockService) GetLowStocks(ctx context.Context) ([]*models.Stock, error) {
 	return s.stockRepo.GetLowStocks(ctx)
+}
+
+// CancelReservationByOrderID cancela una reserva usando order_id y article_id
+func (s *StockService) CancelReservationByOrderID(ctx context.Context, orderID, articleID, reason string) error {
+	// Buscar eventos de reserva para este order_id y article_id
+	events, err := s.eventRepo.GetStockEventsByOrderID(ctx, orderID)
+	if err != nil {
+		return fmt.Errorf("error getting events for order: %w", err)
+	}
+
+	var reserveEvent *models.StockEvent
+	var hasCancel, hasConfirm bool
+
+	// Buscar el evento de reserva y verificar si ya fue cancelada o confirmada
+	for _, event := range events {
+		if event.ArticleID == articleID {
+			switch event.EventType {
+			case models.EventTypeReserve:
+				reserveEvent = event
+			case models.EventTypeCancelReserve:
+				hasCancel = true
+			case models.EventTypeDeduct: // DEDUCT representa confirmación
+				hasConfirm = true
+			}
+		}
+	}
+
+	if reserveEvent == nil {
+		return fmt.Errorf("no active reservation found for this order and article")
+	}
+
+	if hasCancel {
+		return fmt.Errorf("reservation has already been cancelled")
+	}
+
+	if hasConfirm {
+		return fmt.Errorf("reservation has already been confirmed")
+	}
+
+	// Liberar el stock reservado
+	if err := s.stockRepo.CancelReservation(ctx, articleID, reserveEvent.Quantity); err != nil {
+		return fmt.Errorf("error canceling stock reservation: %w", err)
+	}
+
+	// Crear evento de cancelación
+	cancelReason := reason
+	if cancelReason == "" {
+		cancelReason = fmt.Sprintf("Reserva cancelada para orden %s", orderID)
+	}
+
+	event := &models.StockEvent{
+		ArticleID: articleID,
+		EventType: models.EventTypeCancelReserve,
+		Quantity:  reserveEvent.Quantity,
+		OrderID:   &orderID,
+		Reason:    cancelReason,
+	}
+
+	if err := s.eventRepo.CreateStockEvent(ctx, event); err != nil {
+		fmt.Printf("Warning: Could not create stock event: %v\n", err)
+	}
+
+	return nil
+}
+
+// ConfirmReservationByOrderID confirma una reserva usando order_id y article_id
+func (s *StockService) ConfirmReservationByOrderID(ctx context.Context, orderID, articleID, reason string) error {
+	// Buscar eventos de reserva para este order_id y article_id
+	events, err := s.eventRepo.GetStockEventsByOrderID(ctx, orderID)
+	if err != nil {
+		return fmt.Errorf("error getting events for order: %w", err)
+	}
+
+	var reserveEvent *models.StockEvent
+	var hasCancel, hasConfirm bool
+
+	// Buscar el evento de reserva y verificar si ya fue cancelada o confirmada
+	for _, event := range events {
+		if event.ArticleID == articleID {
+			switch event.EventType {
+			case models.EventTypeReserve:
+				reserveEvent = event
+			case models.EventTypeCancelReserve:
+				hasCancel = true
+			case models.EventTypeDeduct: // DEDUCT representa confirmación
+				hasConfirm = true
+			}
+		}
+	}
+
+	if reserveEvent == nil {
+		return fmt.Errorf("no active reservation found for this order and article")
+	}
+
+	if hasCancel {
+		return fmt.Errorf("reservation has already been cancelled")
+	}
+
+	if hasConfirm {
+		return fmt.Errorf("reservation has already been confirmed")
+	}
+
+	// Confirmar la reserva (descontar stock y liberar reserved)
+	if err := s.stockRepo.ConfirmReservation(ctx, articleID, reserveEvent.Quantity); err != nil {
+		return fmt.Errorf("error confirming reservation: %w", err)
+	}
+
+	// Crear evento de confirmación
+	confirmReason := reason
+	if confirmReason == "" {
+		confirmReason = fmt.Sprintf("Stock descontado por confirmación de orden %s", orderID)
+	}
+
+	event := &models.StockEvent{
+		ArticleID: articleID,
+		EventType: models.EventTypeDeduct,
+		Quantity:  reserveEvent.Quantity,
+		OrderID:   &orderID,
+		Reason:    confirmReason,
+	}
+
+	if err := s.eventRepo.CreateStockEvent(ctx, event); err != nil {
+		fmt.Printf("Warning: Could not create stock event: %v\n", err)
+	}
+
+	// Verificar si el stock está bajo después de la confirmación
+	stock, _ := s.stockRepo.GetStockByArticleID(ctx, articleID)
+	if stock != nil && stock.IsLowStock() {
+		s.messagingService.PublishLowStockAlert(ctx, articleID, stock.Quantity, stock.MinStock)
+	}
+
+	return nil
 }

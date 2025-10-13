@@ -5,25 +5,25 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type CancelReservationHandler struct {
+type ConfirmReservationHandler struct {
 	stockService *service.StockService
 }
 
-type CancelReservationRequest struct {
+type ConfirmReservationRequest struct {
 	ArticleID string `json:"article_id" validate:"required"`
 	OrderID   string `json:"order_id" validate:"required"`
 	Reason    string `json:"reason,omitempty"`
 }
 
-func NewCancelReservationHandler(stockService *service.StockService) *CancelReservationHandler {
-	return &CancelReservationHandler{
+func NewConfirmReservationHandler(stockService *service.StockService) *ConfirmReservationHandler {
+	return &ConfirmReservationHandler{
 		stockService: stockService,
 	}
 }
 
-// PUT /api/stock/cancel-reservation
-func (h *CancelReservationHandler) Handle(c *fiber.Ctx) error {
-	var req CancelReservationRequest
+// PUT /api/stock/confirm-reservation
+func (h *ConfirmReservationHandler) Handle(c *fiber.Ctx) error {
+	var req ConfirmReservationRequest
 
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -45,8 +45,8 @@ func (h *CancelReservationHandler) Handle(c *fiber.Ctx) error {
 		})
 	}
 
-	// Cancelar la reserva usando el nuevo método que busca por order_id
-	err := h.stockService.CancelReservationByOrderID(c.Context(), req.OrderID, req.ArticleID, req.Reason)
+	// Confirmar la reserva usando el servicio
+	err := h.stockService.ConfirmReservationByOrderID(c.Context(), req.OrderID, req.ArticleID, req.Reason)
 	if err != nil {
 		if err.Error() == "no active reservation found for this order and article" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -55,17 +55,17 @@ func (h *CancelReservationHandler) Handle(c *fiber.Ctx) error {
 		}
 		if err.Error() == "reservation has already been cancelled" {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "Reservation has already been cancelled",
+				"error": "Cannot confirm a cancelled reservation",
 			})
 		}
 		if err.Error() == "reservation has already been confirmed" {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "Cannot cancel a confirmed reservation",
+				"error": "Reservation has already been confirmed",
 			})
 		}
 
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Failed to cancel reservation",
+			"error":   "Failed to confirm reservation",
 			"details": err.Error(),
 		})
 	}
@@ -74,8 +74,8 @@ func (h *CancelReservationHandler) Handle(c *fiber.Ctx) error {
 	stock, _ := h.stockService.GetStock(c.Context(), req.ArticleID)
 
 	return c.JSON(fiber.Map{
-		"message": "Reservation cancelled successfully",
-		"cancelled_reservation": fiber.Map{
+		"message": "Reservation confirmed successfully",
+		"confirmed_reservation": fiber.Map{
 			"article_id": req.ArticleID,
 			"order_id":   req.OrderID,
 		},

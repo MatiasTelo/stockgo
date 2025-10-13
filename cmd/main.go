@@ -51,8 +51,17 @@ func main() {
 	stockRepo := repository.NewStockRepository(db.PG, db.Redis)
 	eventRepo := repository.NewStockEventRepository(db.PG)
 
+	// Crear publisher para low stock
+	var lowStockPublisher messaging.MessagePublisher
+	if rabbitMQ != nil {
+		lowStockPublisher, err = messaging.NewLowStockPublisher(rabbitMQ.GetConnection())
+		if err != nil {
+			log.Printf("Warning: Failed to create low stock publisher: %v", err)
+		}
+	}
+
 	// Crear servicios
-	stockService := service.NewStockService(stockRepo, eventRepo, rabbitMQ)
+	stockService := service.NewStockService(stockRepo, eventRepo, lowStockPublisher)
 
 	// Crear handlers
 	addArticleHandler := handlers.NewAddArticleHandler(stockService)
@@ -60,6 +69,7 @@ func main() {
 	deductHandler := handlers.NewDeductStockHandler(stockService)
 	reserveHandler := handlers.NewReserveStockHandler(stockService)
 	cancelHandler := handlers.NewCancelReservationHandler(stockService)
+	confirmHandler := handlers.NewConfirmReservationHandler(stockService)
 	lowStockHandler := handlers.NewLowStockHandler(stockService)
 
 	// Configurar Fiber
@@ -116,24 +126,55 @@ func main() {
 	v1.Put("/deduct", deductHandler.Handle)
 
 	// Reservation routes
-	v1.Post("/reserve", reserveHandler.Handle)
+	v1.Put("/reserve", reserveHandler.Handle)
 
-	v1.Delete("/reservations", cancelHandler.Handle)
+	v1.Put("/cancel-reservation", cancelHandler.Handle)
 
-	v1.Post("/reservations/confirm", cancelHandler.ConfirmReservation)
+	v1.Put("/confirm-reservation", confirmHandler.Handle)
 
 	// Low stock and alerts routes
 	v1.Get("/low-stock", lowStockHandler.Handle)
 	v1.Get("/alerts/summary", lowStockHandler.GetAlertsSummary)
 
-	// Configurar consumidor de mensajes de RabbitMQ
+	// Configurar consumidores de RabbitMQ
 	if rabbitMQ != nil {
-		orderProcessor := messaging.NewOrderEventProcessor(stockService)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		if err := rabbitMQ.ConsumeOrderEvents(ctx, orderProcessor); err != nil {
-			log.Printf("Warning: Failed to start consuming order events: %v", err)
+		// Order Placed Consumer
+		orderPlacedConsumer, err := messaging.NewOrderPlacedConsumer(stockService, rabbitMQ.GetConnection())
+		if err != nil {
+			log.Printf("Warning: Failed to create order placed consumer: %v", err)
+		} else {
+			if err := orderPlacedConsumer.StartConsuming(ctx); err != nil {
+				log.Printf("Warning: Failed to start order placed consumer: %v", err)
+			} else {
+				defer orderPlacedConsumer.Close()
+			}
+		}
+
+		// Order Confirmed Consumer
+		orderConfirmedConsumer, err := messaging.NewOrderConfirmedConsumer(stockService, rabbitMQ.GetConnection())
+		if err != nil {
+			log.Printf("Warning: Failed to create order confirmed consumer: %v", err)
+		} else {
+			if err := orderConfirmedConsumer.StartConsuming(ctx); err != nil {
+				log.Printf("Warning: Failed to start order confirmed consumer: %v", err)
+			} else {
+				defer orderConfirmedConsumer.Close()
+			}
+		}
+
+		// Order Canceled Consumer
+		orderCanceledConsumer, err := messaging.NewOrderCanceledConsumer(stockService, rabbitMQ.GetConnection())
+		if err != nil {
+			log.Printf("Warning: Failed to create order canceled consumer: %v", err)
+		} else {
+			if err := orderCanceledConsumer.StartConsuming(ctx); err != nil {
+				log.Printf("Warning: Failed to start order canceled consumer: %v", err)
+			} else {
+				defer orderCanceledConsumer.Close()
+			}
 		}
 	}
 
