@@ -62,7 +62,7 @@ Content-Type: application/json
 
 ### 8. Reservar Stock (JSON)
 ```http
-POST http://localhost:8080/api/stock/reserve
+PUT http://localhost:8080/api/stock/reserve
 Content-Type: application/json
 
 {
@@ -74,12 +74,11 @@ Content-Type: application/json
 
 ### 9. Cancelar Reserva (JSON)
 ```http
-DELETE http://localhost:8080/api/stock/reservations
+PUT http://localhost:8080/api/stock/cancel-reservation
 Content-Type: application/json
 
 {
     "article_id": "ART-001",
-    "quantity": 3,
     "order_id": "ORDER-123",
     "reason": "Cliente canceló la orden"
 }
@@ -87,12 +86,11 @@ Content-Type: application/json
 
 ### 10. Confirmar Reserva (JSON)
 ```http
-POST http://localhost:8080/api/stock/reservations/confirm
+PUT http://localhost:8080/api/stock/confirm-reservation
 Content-Type: application/json
 
 {
     "article_id": "ART-001",
-    "quantity": 3,
     "order_id": "ORDER-789",
     "reason": "Pago confirmado"
 }
@@ -123,7 +121,7 @@ POST /api/stock/articles
 }
 
 # 2. Cliente reserva stock
-POST /api/stock/reserve
+PUT /api/stock/reserve
 {
     "article_id": "LAPTOP-001",
     "quantity": 2,
@@ -134,10 +132,9 @@ POST /api/stock/reserve
 GET /api/stock/articles/LAPTOP-001
 
 # 4. Confirmar reserva (pago exitoso)
-POST /api/stock/reservations/confirm
+PUT /api/stock/confirm-reservation
 {
     "article_id": "LAPTOP-001",
-    "quantity": 2,
     "order_id": "ORDER-SUCCESS-001",
     "reason": "Pago confirmado"
 }
@@ -149,7 +146,7 @@ GET /api/stock/articles/LAPTOP-001
 ### Scenario 2: Cancelación de Orden
 ```bash
 # 1. Reservar stock
-POST /api/stock/reserve
+PUT /api/stock/reserve
 {
     "article_id": "LAPTOP-001",
     "quantity": 1,
@@ -157,10 +154,9 @@ POST /api/stock/reserve
 }
 
 # 2. Cancelar reserva
-DELETE /api/stock/reservations
+PUT /api/stock/cancel-reservation
 {
     "article_id": "LAPTOP-001",
-    "quantity": 1,
     "order_id": "ORDER-CANCEL-001",
     "reason": "Cliente canceló"
 }
@@ -201,7 +197,7 @@ GET /api/stock/articles/LAPTOP-001/events
 
 ### Error 400: Stock Insuficiente para Reserva
 ```http
-POST http://localhost:8080/api/stock/reserve
+PUT http://localhost:8080/api/stock/reserve
 Content-Type: application/json
 
 {
@@ -260,7 +256,66 @@ Content-Type: application/json
 }
 ```
 
-### Respuesta Exitosa - Consultar Stock
+### Respuesta Exitosa - Reservar Stock
+```json
+{
+    "message": "Stock reserved successfully",
+    "reserved": {
+        "article_id": "ART-001",
+        "quantity": 3,
+        "order_id": "ORDER-123"
+    },
+    "stock": {
+        "id": "uuid-123-456",
+        "article_id": "ART-001",
+        "quantity": 97,
+        "reserved": 3,
+        "min_stock": 10,
+        "max_stock": 500,
+        "location": "A1-B2-C3"
+    }
+}
+```
+
+### Respuesta Exitosa - Cancelar Reserva
+```json
+{
+    "message": "Reservation cancelled successfully",
+    "cancelled_reservation": {
+        "article_id": "ART-001",
+        "order_id": "ORDER-123"
+    },
+    "stock": {
+        "id": "uuid-123-456",
+        "article_id": "ART-001",
+        "quantity": 97,
+        "reserved": 0,
+        "min_stock": 10,
+        "max_stock": 500,
+        "location": "A1-B2-C3"
+    }
+}
+```
+
+### Respuesta Exitosa - Confirmar Reserva
+```json
+{
+    "message": "Reservation confirmed successfully",
+    "confirmed_reservation": {
+        "article_id": "ART-001",
+        "order_id": "ORDER-789"
+    },
+    "stock": {
+        "id": "uuid-123-456",
+        "article_id": "ART-001",
+        "quantity": 94,
+        "reserved": 0,
+        "min_stock": 10,
+        "max_stock": 500,
+        "location": "A1-B2-C3"
+    }
+}
+```
 ```json
 {
     "id": "uuid-123-456",
@@ -339,22 +394,28 @@ Content-Type: application/json
 - `{{article_id}}` = `ART-001`
 - `{{order_id}}` = `ORDER-123`
 
-### 2. Verificar Consistencia de Stock
+### 2. Cambios Importantes en los Handlers ⚠️
+- **Reservar Stock**: Ahora usa `PUT /api/stock/reserve` (antes POST)
+- **Cancelar Reserva**: Ahora usa `PUT /api/stock/cancel-reservation` y **NO requiere `quantity`**
+- **Confirmar Reserva**: Ahora usa `PUT /api/stock/confirm-reservation` y **NO requiere `quantity`**
+- **Identificación por OrderID**: Las operaciones de cancelar/confirmar se basan en `order_id` + `article_id`
+
+### 3. Verificar Consistencia de Stock
 Después de cada operación, verificar:
 - `quantity` ≥ `reserved` (siempre)
 - `quantity - reserved` = stock disponible
 - Los eventos se registran correctamente
 
-### 3. Flujo de Prueba Recomendado
+### 4. Flujo de Prueba Recomendado
 1. **Health Check** → Verificar servicio activo
 2. **Crear Artículo** → Establecer inventario inicial
 3. **Consultar Stock** → Verificar datos
-4. **Reservar** → Simular orden de cliente
-5. **Verificar Reserva** → Confirmar cambios
-6. **Confirmar o Cancelar** → Completar flujo
+4. **Reservar Stock** → Simular orden de cliente (`PUT /reserve`)
+5. **Verificar Reserva** → Confirmar cambios en stock
+6. **Confirmar o Cancelar** → Completar flujo (`PUT /confirm-reservation` o `PUT /cancel-reservation`)
 7. **Verificar Estado Final** → Validar consistencia
 
-### 4. Casos de Prueba por Cubrir
+### 5. Casos de Prueba por Cubrir
 - ✅ Stock suficiente vs insuficiente
 - ✅ Artículos existentes vs inexistentes
 - ✅ Datos válidos vs inválidos

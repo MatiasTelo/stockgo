@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/MatiasTelo/stockgo/internal/models"
 	"github.com/MatiasTelo/stockgo/internal/service"
@@ -120,7 +121,15 @@ func (c *OrderPlacedConsumer) StartConsuming(ctx context.Context) error {
 
 				if err := c.handleMessage(ctx, msg); err != nil {
 					log.Printf("OrderPlacedConsumer: Error processing message: %v", err)
-					msg.Nack(false, true) // requeue on error
+
+					// Verificar si es un error recuperable o no recuperable
+					if c.isRecoverableError(err) {
+						log.Printf("OrderPlacedConsumer: Recoverable error, requeuing message")
+						msg.Nack(false, true) // requeue only for recoverable errors
+					} else {
+						log.Printf("OrderPlacedConsumer: Non-recoverable error, rejecting message: %v", err)
+						msg.Nack(false, false) // reject without requeuing
+					}
 				} else {
 					msg.Ack(false)
 				}
@@ -173,6 +182,29 @@ func (c *OrderPlacedConsumer) compensateReservations(ctx context.Context, orderI
 			log.Printf("OrderPlacedConsumer: Failed to compensate reservation for article %s: %v", item.ArticleID, err)
 		}
 	}
+}
+
+// isRecoverableError determina si un error es recuperable o no
+func (c *OrderPlacedConsumer) isRecoverableError(err error) bool {
+	errorMsg := err.Error()
+
+	// Errores no recuperables (no reencolar)
+	nonRecoverableErrors := []string{
+		"already has an active reservation",
+		"duplicate order",
+		"invalid order format",
+		"article not found",
+		"insufficient stock",
+	}
+
+	for _, nonRecoverable := range nonRecoverableErrors {
+		if strings.Contains(errorMsg, nonRecoverable) {
+			return false
+		}
+	}
+
+	// Por defecto, consideramos otros errores como recuperables
+	return true
 }
 
 // Close cierra las conexiones del consumer

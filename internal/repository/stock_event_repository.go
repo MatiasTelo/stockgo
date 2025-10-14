@@ -138,15 +138,15 @@ func (r *StockEventRepository) GetAllStockEvents(ctx context.Context, offset, li
 	return events, nil
 }
 
-// HasActiveReservation verifica si existe una reserva activa para un order_id
-func (r *StockEventRepository) HasActiveReservation(ctx context.Context, orderID string) (bool, error) {
+// HasActiveReservation verifica si existe una reserva activa para un order_id y article_id específicos
+func (r *StockEventRepository) HasActiveReservation(ctx context.Context, orderID, articleID string) (bool, error) {
 	query := `
 		SELECT EXISTS(
 			SELECT 1 FROM stock_events 
-			WHERE order_id = $1 AND event_type = 'RESERVE'
+			WHERE order_id = $1 AND article_id = $2 AND event_type = 'RESERVE'
 			AND NOT EXISTS(
 				SELECT 1 FROM stock_events se2 
-				WHERE se2.order_id = $1 
+				WHERE se2.order_id = $1 AND se2.article_id = $2
 				AND se2.event_type IN ('CANCEL_RESERVE', 'CONFIRM_RESERVE')
 				AND se2.created_at > stock_events.created_at
 			)
@@ -154,7 +154,7 @@ func (r *StockEventRepository) HasActiveReservation(ctx context.Context, orderID
 	`
 
 	var exists bool
-	err := r.db.QueryRow(ctx, query, orderID).Scan(&exists)
+	err := r.db.QueryRow(ctx, query, orderID, articleID).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("error checking active reservation: %w", err)
 	}
