@@ -13,9 +13,10 @@ import (
 
 // OrderPlacedConsumer maneja los eventos de órdenes creadas
 type OrderPlacedConsumer struct {
-	stockService *service.StockService
-	connection   *amqp091.Connection
-	channel      *amqp091.Channel
+	stockService               *service.StockService
+	connection                 *amqp091.Connection
+	channel                    *amqp091.Channel
+	insufficientStockPublisher *InsufficientStockPublisher
 }
 
 // OrderPlacedMessage representa el mensaje de orden creada (estructura del microservicio de órdenes)
@@ -32,16 +33,17 @@ type ArticlePlacedData struct {
 	Quantity  int    `json:"quantity"`
 }
 
-func NewOrderPlacedConsumer(stockService *service.StockService, conn *amqp091.Connection) (*OrderPlacedConsumer, error) {
+func NewOrderPlacedConsumer(stockService *service.StockService, conn *amqp091.Connection, insufficientStockPublisher *InsufficientStockPublisher) (*OrderPlacedConsumer, error) {
 	ch, err := conn.Channel()
 	if err != nil {
 		return nil, err
 	}
 
 	consumer := &OrderPlacedConsumer{
-		stockService: stockService,
-		connection:   conn,
-		channel:      ch,
+		stockService:               stockService,
+		connection:                 conn,
+		channel:                    ch,
+		insufficientStockPublisher: insufficientStockPublisher,
 	}
 
 	if err := consumer.setupQueue(); err != nil {
@@ -148,7 +150,14 @@ func (c *OrderPlacedConsumer) handleMessage(ctx context.Context, msg amqp091.Del
 
 	log.Printf("OrderPlacedConsumer: Processing order placed: %s with %d items", orderMsg.OrderID, len(orderMsg.Articles))
 
-	// Reservar stock para cada artículo en la orden
+	// Array para recopilar artículos con stock insuficiente
+	var insufficientStockArticles []string
+	// Array para tracking de artículos reservados exitosamente
+	var successfullyReserved []string
+	// Flag para indicar si hubo algún error
+	var hasError error
+
+	// Intentar reservar stock para cada artículo en la orden
 	for _, item := range orderMsg.Articles {
 		req := &models.ReserveStockRequest{
 			ArticleID: item.ArticleID,
@@ -160,13 +169,50 @@ func (c *OrderPlacedConsumer) handleMessage(ctx context.Context, msg amqp091.Del
 			log.Printf("OrderPlacedConsumer: Failed to reserve stock for article %s in order %s: %v",
 				item.ArticleID, orderMsg.OrderID, err)
 
-			// Compensar reservas ya hechas
-			c.compensateReservations(ctx, orderMsg.OrderID, orderMsg.Articles)
-			return err
+			// Si es error de stock insuficiente, agregarlo a la lista
+			if strings.Contains(err.Error(), "insufficient stock") || strings.Contains(err.Error(), "not enough stock") {
+				insufficientStockArticles = append(insufficientStockArticles, item.ArticleID)
+			}
+
+			// Guardar el error pero continuar verificando los demás artículos
+			hasError = err
+		} else {
+			// Marcar como exitosamente reservado
+			successfullyReserved = append(successfullyReserved, item.ArticleID)
+			log.Printf("OrderPlacedConsumer: Successfully reserved %d units of article %s for order %s",
+				item.Quantity, item.ArticleID, orderMsg.OrderID)
+		}
+	}
+
+	// Si hubo artículos con stock insuficiente, publicar mensaje y rechazar la orden
+	if len(insufficientStockArticles) > 0 {
+		log.Printf("OrderPlacedConsumer: Order %s has insufficient stock for %d article(s): %v",
+			orderMsg.OrderID, len(insufficientStockArticles), insufficientStockArticles)
+
+		// Publicar mensaje con TODOS los artículos sin stock
+		if c.insufficientStockPublisher != nil {
+			if err := c.insufficientStockPublisher.PublishInsufficientStock(ctx, orderMsg.OrderID, insufficientStockArticles); err != nil {
+				log.Printf("OrderPlacedConsumer: Failed to publish insufficient stock alert: %v", err)
+			} else {
+				log.Printf("OrderPlacedConsumer: Published insufficient stock alert for order %s with %d articles",
+					orderMsg.OrderID, len(insufficientStockArticles))
+			}
 		}
 
-		log.Printf("OrderPlacedConsumer: Successfully reserved %d units of article %s for order %s",
-			item.Quantity, item.ArticleID, orderMsg.OrderID)
+		// Compensar las reservas que se hicieron exitosamente
+		if len(successfullyReserved) > 0 {
+			log.Printf("OrderPlacedConsumer: Compensating %d successful reservations", len(successfullyReserved))
+			c.compensateReservations(ctx, orderMsg.OrderID, orderMsg.Articles)
+		}
+
+		return hasError
+	}
+
+	// Si hubo algún error pero no fue de stock insuficiente, compensar y retornar error
+	if hasError != nil {
+		log.Printf("OrderPlacedConsumer: Error processing order %s, compensating reservations", orderMsg.OrderID)
+		c.compensateReservations(ctx, orderMsg.OrderID, orderMsg.Articles)
+		return hasError
 	}
 
 	log.Printf("OrderPlacedConsumer: Successfully processed order placed: %s", orderMsg.OrderID)

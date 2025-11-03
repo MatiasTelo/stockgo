@@ -141,8 +141,16 @@ func main() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		// Insufficient Stock Publisher
+		insufficientStockPublisher, err := messaging.NewInsufficientStockPublisher(rabbitMQ.GetConnection())
+		if err != nil {
+			log.Printf("Warning: Failed to create insufficient stock publisher: %v", err)
+		} else {
+			defer insufficientStockPublisher.Close()
+		}
+
 		// Order Placed Consumer
-		orderPlacedConsumer, err := messaging.NewOrderPlacedConsumer(stockService, rabbitMQ.GetConnection())
+		orderPlacedConsumer, err := messaging.NewOrderPlacedConsumer(stockService, rabbitMQ.GetConnection(), insufficientStockPublisher)
 		if err != nil {
 			log.Printf("Warning: Failed to create order placed consumer: %v", err)
 		} else {

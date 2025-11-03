@@ -34,7 +34,7 @@
 
 ## 2. Mensaje de Orden Confirmada (order_confirmed)
 
-**Routing Key:** `order_confirmed`  
+**Routing Key:** `order.confirmed`  
 **Cola:** `stock.order.confirmed`
 
 ```json
@@ -58,7 +58,7 @@
 
 ## 3. Mensaje de Orden Cancelada (order_canceled)
 
-**Routing Key:** `order_canceled`  
+**Routing Key:** `order.canceled`  
 **Cola:** `stock.order.canceled`
 
 ```json

@@ -377,39 +377,19 @@ Servicio disponible en: `http://localhost:8080`
 
 ## 🐰 Interfaz Asíncrona (RabbitMQ)
 
-### Configuración de Exchange y Colas
-
+### Exchange Principal
 **Exchange**: `ecommerce` (tipo: topic)
 
-**Colas y Routing Keys**:
-- `stock.order.placed` → routing key: `order_placed`
-- `stock.order.confirmed` → routing key: `order_confirmed`  
-- `stock.order.canceled` → routing key: `order_canceled`
-- Exchange para alerts → routing key: `article_lowstock`
+---
 
-### CU: Procesamiento de Orden Creada
+### 📥 Consumers (Mensajes Recibidos)
 
-**Consumer**: OrderPlacedConsumer  
-**Queue**: `stock.order.placed`  
-**Routing Key**: `order_placed`
+#### 1. Procesamiento de Orden Creada
+- **Consumer**: OrderPlacedConsumer
+- **Queue**: `stock.order.placed`
+- **Routing Key**: `order_placed`
 
-**Precondición**: El microservicio de órdenes envía un mensaje cuando se crea una nueva orden
-
-**Camino normal**:
-1. Recibir mensaje de orden creada
-2. Para cada artículo en la orden:
-   - Verificar que no exista reserva activa para el mismo order_id + article_id
-   - Validar stock disponible
-   - Reservar stock (incrementar campo "reserved")
-   - Crear evento RESERVE en el historial
-3. Si todos los artículos se reservan exitosamente, confirmar mensaje (ACK)
-
-**Caminos alternativos**:
-- Si ya existe reserva para order_id + article_id: rechazar mensaje sin reencolar
-- Si no hay stock suficiente: compensar reservas ya hechas y rechazar mensaje
-- Si hay error de conexión: reencolar mensaje para reintento
-
-**Body del mensaje recibido**:
+**Body del mensaje**:
 ```json
 {
   "orderId": "ORD-001",
@@ -428,23 +408,12 @@ Servicio disponible en: `http://localhost:8080`
 }
 ```
 
-### CU: Procesamiento de Orden Confirmada
+#### 2. Procesamiento de Orden Confirmada
+- **Consumer**: OrderConfirmedConsumer
+- **Queue**: `stock.order.confirmed`
+- **Routing Key**: `order_confirmed`
 
-**Consumer**: OrderConfirmedConsumer  
-**Queue**: `stock.order.confirmed`  
-**Routing Key**: `order_confirmed`
-
-**Precondición**: El microservicio de órdenes confirma una orden (pago exitoso)
-
-**Camino normal**:
-1. Recibir mensaje de orden confirmada
-2. Para cada artículo en la orden:
-   - Buscar reserva activa por order_id + article_id
-   - Confirmar reserva: decrementar currentStock y reserved
-   - Crear evento CONFIRM_RESERVE en el historial
-3. Verificar si algún artículo queda con stock bajo y enviar alerta si corresponde
-
-**Body del mensaje recibido**:
+**Body del mensaje**:
 ```json
 {
   "orderId": "ORD-001",
@@ -460,23 +429,12 @@ Servicio disponible en: `http://localhost:8080`
 }
 ```
 
-### CU: Procesamiento de Orden Cancelada
+#### 3. Procesamiento de Orden Cancelada
+- **Consumer**: OrderCanceledConsumer
+- **Queue**: `stock.order.canceled`
+- **Routing Key**: `order_canceled`
 
-**Consumer**: OrderCanceledConsumer  
-**Queue**: `stock.order.canceled`  
-**Routing Key**: `order_canceled`
-
-**Precondición**: El microservicio de órdenes cancela una orden
-
-**Camino normal**:
-1. Recibir mensaje de orden cancelada
-2. Para cada artículo en la orden:
-   - Buscar reserva activa por order_id + article_id
-   - Cancelar reserva: decrementar reserved
-   - Crear evento CANCEL_RESERVE en el historial
-3. Liberar stock reservado para futuras operaciones
-
-**Body del mensaje recibido**:
+**Body del mensaje**:
 ```json
 {
   "orderId": "ORD-001",
@@ -493,20 +451,27 @@ Servicio disponible en: `http://localhost:8080`
 }
 ```
 
-### CU: Publicación de Alertas de Stock Bajo
+---
 
-**Publisher**: LowStockPublisher  
-**Exchange**: `ecommerce`  
-**Routing Key**: `article_lowstock`
+### 📤 Publishers (Mensajes Enviados)
 
-**Precondición**: Después de una operación, el stock de un artículo queda en el nivel mínimo o menor
+#### 1. Alerta de Stock Insuficiente
+- **Publisher**: InsufficientStockPublisher
+- **Routing Key**: `insufficient_stock`
 
-**Camino normal**:
-1. Detectar que currentStock <= min_stock después de una operación
-2. Publicar mensaje de alerta con información del artículo
-3. Registrar evento LOW_STOCK en el historial
+**Body del mensaje**:
+```json
+{
+  "order_id": "ORD-001",
+  "article_ids": ["ART-001", "ART-003"]
+}
+```
 
-**Body del mensaje enviado**:
+#### 2. Alerta de Stock Bajo
+- **Publisher**: LowStockPublisher
+- **Routing Key**: `article_lowstock`
+
+**Body del mensaje**:
 ```json
 {
   "article_id": "ART-001",
@@ -514,36 +479,6 @@ Servicio disponible en: `http://localhost:8080`
   "min_quantity": 10,
   "location": "Warehouse A"
 }
-```
-
-### Manejo de Errores y Reintentos
-
-**Errores No Recuperables** (se rechazan sin reencolar):
-- `already has an active reservation` - Reserva duplicada
-- `article not found` - Artículo inexistente  
-- `invalid order format` - Formato de mensaje inválido
-- `insufficient stock` - Stock insuficiente
-
-**Errores Recuperables** (se reencolan para reintento):
-- Errores de conexión a base de datos
-- Timeouts temporales
-- Errores de red
-
-### Configuración de RabbitMQ
-
-```bash
-# Crear exchange
-rabbitmqadmin declare exchange name=ecommerce type=topic durable=true
-
-# Crear colas
-rabbitmqadmin declare queue name=stock.order.placed durable=true
-rabbitmqadmin declare queue name=stock.order.confirmed durable=true  
-rabbitmqadmin declare queue name=stock.order.canceled durable=true
-
-# Crear bindings
-rabbitmqadmin declare binding source=ecommerce destination=stock.order.placed routing_key=order_placed
-rabbitmqadmin declare binding source=ecommerce destination=stock.order.confirmed routing_key=order_confirmed
-rabbitmqadmin declare binding source=ecommerce destination=stock.order.canceled routing_key=order_canceled
 ```
 
 
