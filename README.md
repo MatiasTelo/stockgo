@@ -269,61 +269,9 @@ Microservicio especializado en la gestión de inventario y stock desarrollado en
 - **Backend**: Go 1.25+ con Fiber Framework v2
 - **Base de Datos**: PostgreSQL 13+
 - **Migraciones**: golang-migrate/migrate
-- **Cache**: Redis (opcional)
-- **Mensajería**: RabbitMQ (opcional, futuras integraciones)
-- **Validaciones**: go-playground/validator/v10
+- **Cache**: Redis
+- **Mensajería**: RabbitMQ
 
-### Estructura de Capas
-```
-┌─────────────────┐
-│   Handlers      │ ← API REST / HTTP
-├─────────────────┤
-│   Services      │ ← Lógica de negocio
-├─────────────────┤
-│  Repository     │ ← Acceso a datos
-├─────────────────┤
-│   Database      │ ← PostgreSQL
-└─────────────────┘
-```
-
-## 📁 Estructura del Proyecto
-
-```
-stockgo/
-├── cmd/
-│   ├── main.go                    # Punto de entrada principal
-│   └── migrate.go                 # Utilidad de migraciones
-├── internal/
-│   ├── config/
-│   │   └── config.go              # Configuración de la aplicación
-│   ├── database/
-│   │   └── database.go            # Conexión a PostgreSQL
-│   ├── handlers/                  # Controladores HTTP
-│   │   ├── add_article.go         # Gestión de artículos
-│   │   ├── replenish_stock.go     # Reabastecimiento
-│   │   ├── deduct_stock.go        # Deducciones
-│   │   ├── reserve_stock.go       # Reservas
-│   │   ├── cancel_reservation.go  # Cancelaciones
-│   │   └── low_stock.go           # Alertas de stock bajo
-│   ├── models/                    # Modelos de datos
-│   │   ├── stock.go               # Modelo Stock
-│   │   └── stock_event.go         # Modelo StockEvent
-│   ├── repository/                # Capa de acceso a datos
-│   │   ├── stock_repository.go    # Operaciones de Stock
-│   │   └── stock_event_repository.go # Operaciones de StockEvent
-│   ├── service/
-│   │   └── stock_service.go       # Lógica de negocio central
-│   └── messaging/                 # RabbitMQ (futuro)
-├── migrations/                    # Migraciones SQL
-│   ├── 001_create_stocks_table.up.sql
-│   ├── 002_create_stock_events_table.up.sql
-│   └── ...
-├── postman_collection.json        # Colección Postman
-├── POSTMAN_EXAMPLES.md            # Ejemplos de uso de API
-├── Dockerfile                     # Containerización
-├── go.mod                         # Dependencias Go
-└── README.md
-```
 
 ## 🚀 Instalación y Configuración
 
