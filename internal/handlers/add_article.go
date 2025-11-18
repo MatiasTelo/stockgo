@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"strconv"
-
 	"github.com/MatiasTelo/stockgo/internal/models"
 	"github.com/MatiasTelo/stockgo/internal/service"
 	"github.com/gofiber/fiber/v2"
@@ -61,7 +59,7 @@ func (h *AddArticleHandler) Handle(c *fiber.Ctx) error {
 				"error": err.Error(),
 			})
 		}
-		
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to create stock",
 			"details": err.Error(),
@@ -71,73 +69,5 @@ func (h *AddArticleHandler) Handle(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Article added successfully",
 		"data":    stock,
-	})
-}
-
-// GET /api/stock/articles/:articleId
-func (h *AddArticleHandler) GetArticle(c *fiber.Ctx) error {
-	articleID := c.Params("articleId")
-	if articleID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "article_id is required",
-		})
-	}
-
-	stock, err := h.stockService.GetStock(c.Context(), articleID)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Article not found",
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"data": stock,
-	})
-}
-
-// GET /api/stock/articles
-func (h *AddArticleHandler) GetAllArticles(c *fiber.Ctx) error {
-	stocks, err := h.stockService.GetAllStocks(c.Context())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Failed to retrieve stocks",
-			"details": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"data":  stocks,
-		"count": len(stocks),
-	})
-}
-
-// GET /api/stock/articles/:articleId/events
-func (h *AddArticleHandler) GetArticleEvents(c *fiber.Ctx) error {
-	articleID := c.Params("articleId")
-	if articleID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "article_id is required",
-		})
-	}
-
-	// Parse limit parameter
-	limit := 50 // default
-	if limitStr := c.Query("limit"); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	events, err := h.stockService.GetStockEvents(c.Context(), articleID, limit)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Failed to retrieve stock events",
-			"details": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"data":  events,
-		"count": len(events),
 	})
 }

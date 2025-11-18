@@ -12,6 +12,7 @@ import (
 	"github.com/MatiasTelo/stockgo/internal/database"
 	"github.com/MatiasTelo/stockgo/internal/handlers"
 	"github.com/MatiasTelo/stockgo/internal/messaging"
+	"github.com/MatiasTelo/stockgo/internal/middleware"
 	"github.com/MatiasTelo/stockgo/internal/repository"
 	"github.com/MatiasTelo/stockgo/internal/service"
 	"github.com/gofiber/fiber/v2"
@@ -62,9 +63,13 @@ func main() {
 
 	// Crear servicios
 	stockService := service.NewStockService(stockRepo, eventRepo, lowStockPublisher)
+	authService := service.NewAuthService(db.Redis, cfg.Auth.ServiceURL)
 
 	// Crear handlers
 	addArticleHandler := handlers.NewAddArticleHandler(stockService)
+	getArticleHandler := handlers.NewGetArticleHandler(stockService)
+	getAllArticlesHandler := handlers.NewGetAllArticlesHandler(stockService)
+	getArticleEventsHandler := handlers.NewGetArticleEventsHandler(stockService)
 	replenishHandler := handlers.NewReplenishStockHandler(stockService)
 	deductHandler := handlers.NewDeductStockHandler(stockService)
 	reserveHandler := handlers.NewReserveStockHandler(stockService)
@@ -116,9 +121,9 @@ func main() {
 
 	// Article management routes
 	v1.Post("/articles", addArticleHandler.Handle)
-	v1.Get("/articles", addArticleHandler.GetAllArticles)
-	v1.Get("/articles/:articleId", addArticleHandler.GetArticle)
-	v1.Get("/articles/:articleId/events", addArticleHandler.GetArticleEvents)
+	v1.Get("/articles", middleware.AuthMiddleware(authService), getAllArticlesHandler.Handle)
+	v1.Get("/articles/:articleId", middleware.AuthMiddleware(authService), getArticleHandler.Handle)
+	v1.Get("/articles/:articleId/events", middleware.AuthMiddleware(authService), getArticleEventsHandler.Handle)
 
 	// Stock operations routes
 	v1.Put("/replenish", replenishHandler.Handle)
@@ -134,7 +139,6 @@ func main() {
 
 	// Low stock and alerts routes
 	v1.Get("/low-stock", lowStockHandler.Handle)
-	v1.Get("/alerts/summary", lowStockHandler.GetAlertsSummary)
 
 	// Configurar consumidores de RabbitMQ
 	if rabbitMQ != nil {

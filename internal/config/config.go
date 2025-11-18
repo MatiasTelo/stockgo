@@ -13,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig
 	Redis    RedisConfig
 	RabbitMQ RabbitMQConfig
+	Auth     AuthConfig
 }
 
 type ServerConfig struct {
@@ -42,6 +43,10 @@ type RabbitMQConfig struct {
 	QueueName string
 }
 
+type AuthConfig struct {
+	ServiceURL string
+}
+
 func Load() (*Config, error) {
 	// Cargar variables de entorno desde archivo .env si existe
 	_ = godotenv.Load()
@@ -69,6 +74,9 @@ func Load() (*Config, error) {
 			URL:       getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 			Exchange:  getEnv("RABBITMQ_EXCHANGE", "ecommerce"),
 			QueueName: getEnv("RABBITMQ_QUEUE", "stock_events"),
+		},
+		Auth: AuthConfig{
+			ServiceURL: getEnv("AUTH_SERVICE_URL", "http://localhost:3000"),
 		},
 	}, nil
 }

@@ -24,17 +24,22 @@ Content-Type: application/json
 ### 3. Obtener Stock de Artículo
 ```http
 GET http://localhost:8080/api/stock/articles/ART-001
+Authorization: Bearer YOUR_TOKEN_HERE
 ```
 
 ### 4. Obtener Todos los Artículos
 ```http
 GET http://localhost:8080/api/stock/articles
+Authorization: Bearer YOUR_TOKEN_HERE
 ```
 
 ### 5. Obtener Eventos de un Artículo
 ```http
 GET http://localhost:8080/api/stock/articles/ART-001/events
+Authorization: Bearer YOUR_TOKEN_HERE
 ```
+
+**Nota:** Todos los endpoints GET requieren autenticación mediante token Bearer en el header `Authorization`.
 
 ### 6. Reabastecer Stock (JSON)
 ```http
@@ -101,10 +106,24 @@ Content-Type: application/json
 GET http://localhost:8080/api/stock/low-stock
 ```
 
-### 12. Obtener Resumen de Alertas
-```http
-GET http://localhost:8080/api/stock/alerts/summary
+## 🔐 Autenticación
+
+Los siguientes endpoints requieren autenticación mediante token Bearer:
+- `GET /api/stock/articles` - Obtener todos los artículos
+- `GET /api/stock/articles/:articleId` - Obtener un artículo específico  
+- `GET /api/stock/articles/:articleId/events` - Obtener eventos de un artículo
+
+### Cómo usar autenticación en Postman:
+1. En la pestaña "Authorization" de la request
+2. Selecciona "Bearer Token" en el dropdown
+3. Pega tu token en el campo "Token"
+
+O directamente en Headers:
 ```
+Authorization: Bearer YOUR_TOKEN_HERE
+```
+
+**Nota:** Los endpoints POST y PUT no requieren autenticación por ahora.
 
 ## 🧪 Scenarios de Prueba Completos
 
@@ -130,6 +149,7 @@ PUT /api/stock/reserve
 
 # 3. Verificar stock reservado
 GET /api/stock/articles/LAPTOP-001
+Authorization: Bearer YOUR_TOKEN_HERE
 
 # 4. Confirmar reserva (pago exitoso)
 PUT /api/stock/confirm-reservation
@@ -141,6 +161,7 @@ PUT /api/stock/confirm-reservation
 
 # 5. Verificar stock final
 GET /api/stock/articles/LAPTOP-001
+Authorization: Bearer YOUR_TOKEN_HERE
 ```
 
 ### Scenario 2: Cancelación de Orden
@@ -163,12 +184,14 @@ PUT /api/stock/cancel-reservation
 
 # 3. Verificar que el stock se liberó
 GET /api/stock/articles/LAPTOP-001
+Authorization: Bearer YOUR_TOKEN_HERE
 ```
 
 ### Scenario 3: Gestión de Inventario
 ```bash
 # 1. Verificar stock actual
 GET /api/stock/articles/LAPTOP-001
+Authorization: Bearer YOUR_TOKEN_HERE
 
 # 2. Reabastecer inventario
 PUT /api/stock/replenish
@@ -191,6 +214,7 @@ PUT /api/stock/deduct
 
 # 5. Ver eventos del artículo
 GET /api/stock/articles/LAPTOP-001/events
+Authorization: Bearer YOUR_TOKEN_HERE
 ```
 
 ## 🔍 Casos de Error para Probar
@@ -210,6 +234,30 @@ Content-Type: application/json
 ### Error 404: Artículo No Existe
 ```http
 GET http://localhost:8080/api/stock/articles/ARTICULO-INEXISTENTE
+Authorization: Bearer YOUR_TOKEN_HERE
+```
+
+### Error 401: Sin Token de Autenticación
+```http
+GET http://localhost:8080/api/stock/articles/ART-001
+```
+**Respuesta esperada:**
+```json
+{
+    "error": "Authorization header is required"
+}
+```
+
+### Error 401: Token Inválido
+```http
+GET http://localhost:8080/api/stock/articles/ART-001
+Authorization: Bearer INVALID_TOKEN
+```
+**Respuesta esperada:**
+```json
+{
+    "error": "Invalid authorization header format. Expected: Bearer <token>"
+}
 ```
 
 ### Error 400: Datos Inválidos
@@ -386,41 +434,3 @@ Content-Type: application/json
     "article_id": "ARTICULO-INEXISTENTE"
 }
 ```
-
-## 🎯 Tips para Pruebas Efectivas
-
-### 1. Usar Variables de Entorno en Postman
-- `{{base_url}}` = `http://localhost:8080`
-- `{{article_id}}` = `ART-001`
-- `{{order_id}}` = `ORDER-123`
-
-### 2. Cambios Importantes en los Handlers ⚠️
-- **Reservar Stock**: Ahora usa `PUT /api/stock/reserve` (antes POST)
-- **Cancelar Reserva**: Ahora usa `PUT /api/stock/cancel-reservation` y **NO requiere `quantity`**
-- **Confirmar Reserva**: Ahora usa `PUT /api/stock/confirm-reservation` y **NO requiere `quantity`**
-- **Identificación por OrderID**: Las operaciones de cancelar/confirmar se basan en `order_id` + `article_id`
-
-### 3. Verificar Consistencia de Stock
-Después de cada operación, verificar:
-- `quantity` ≥ `reserved` (siempre)
-- `quantity - reserved` = stock disponible
-- Los eventos se registran correctamente
-
-### 4. Flujo de Prueba Recomendado
-1. **Health Check** → Verificar servicio activo
-2. **Crear Artículo** → Establecer inventario inicial
-3. **Consultar Stock** → Verificar datos
-4. **Reservar Stock** → Simular orden de cliente (`PUT /reserve`)
-5. **Verificar Reserva** → Confirmar cambios en stock
-6. **Confirmar o Cancelar** → Completar flujo (`PUT /confirm-reservation` o `PUT /cancel-reservation`)
-7. **Verificar Estado Final** → Validar consistencia
-
-### 5. Casos de Prueba por Cubrir
-- ✅ Stock suficiente vs insuficiente
-- ✅ Artículos existentes vs inexistentes
-- ✅ Datos válidos vs inválidos
-- ✅ Reservas exitosas vs fallidas
-- ✅ Operaciones concurrentes
-- ✅ Umbrales de stock mínimo/máximo
-
-¡Listo para probar tu microservicio de stock paso a paso! 🚀
