@@ -120,7 +120,7 @@ func main() {
 	v1 := api.Group("/stock")
 
 	// Article management routes
-	v1.Post("/articles", addArticleHandler.Handle)
+	v1.Post("/articles", middleware.AuthMiddleware(authService), addArticleHandler.Handle)
 	v1.Get("/articles", middleware.AuthMiddleware(authService), getAllArticlesHandler.Handle)
 	v1.Get("/articles/:articleId", middleware.AuthMiddleware(authService), getArticleHandler.Handle)
 	v1.Get("/articles/:articleId/events", middleware.AuthMiddleware(authService), getArticleEventsHandler.Handle)
