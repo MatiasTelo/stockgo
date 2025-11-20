@@ -19,6 +19,14 @@ type OrderPlacedConsumer struct {
 	insufficientStockPublisher *InsufficientStockPublisher
 }
 
+// OrderPlacedMessageWrapper es el contenedor del mensaje que viene de RabbitMQ
+type OrderPlacedMessageWrapper struct {
+	CorrelationID string             `json:"correlation_id"`
+	Exchange      string             `json:"exchange"`
+	RoutingKey    string             `json:"routing_key"`
+	Message       OrderPlacedMessage `json:"message"`
+}
+
 // OrderPlacedMessage representa el mensaje de orden creada
 type OrderPlacedMessage struct {
 	OrderID  string              `json:"orderId"`
@@ -57,13 +65,13 @@ func NewOrderPlacedConsumer(stockService *service.StockService, conn *amqp091.Co
 func (c *OrderPlacedConsumer) setupQueue() error {
 	// Declarar exchange fanout
 	err := c.channel.ExchangeDeclare(
-		"orders_placed", // nombre del exchange
-		"fanout",        // tipo fanout
-		true,            // durable
-		false,           // auto-deleted
-		false,           // internal
-		false,           // no-wait
-		nil,             // arguments
+		"order_placed", // nombre del exchange
+		"fanout",       // tipo fanout
+		false,          // durable
+		false,          // auto-deleted
+		false,          // internal
+		false,          // no-wait
+		nil,            // arguments
 	)
 	if err != nil {
 		return err
@@ -71,12 +79,12 @@ func (c *OrderPlacedConsumer) setupQueue() error {
 
 	// Declarar cola
 	queue, err := c.channel.QueueDeclare(
-		"orders_placed_stock", // nombre único para stock service
-		true,                  // durable
-		false,                 // delete when unused
-		false,                 // exclusive
-		false,                 // no-wait
-		nil,                   // arguments
+		"order_placed_stock", // nombre único para stock service
+		true,                 // durable
+		false,                // delete when unused
+		false,                // exclusive
+		false,                // no-wait
+		nil,                  // arguments
 	)
 	if err != nil {
 		return err
@@ -84,9 +92,9 @@ func (c *OrderPlacedConsumer) setupQueue() error {
 
 	// Bind cola al exchange (routing key vacío para fanout)
 	return c.channel.QueueBind(
-		queue.Name,      // queue name
-		"",              // routing key vacío para fanout
-		"orders_placed", // exchange
+		queue.Name,     // queue name
+		"",             // routing key vacío para fanout
+		"order_placed", // exchange
 		false,
 		nil,
 	)
@@ -95,19 +103,20 @@ func (c *OrderPlacedConsumer) setupQueue() error {
 // StartConsuming inicia el consumo de mensajes
 func (c *OrderPlacedConsumer) StartConsuming(ctx context.Context) error {
 	msgs, err := c.channel.Consume(
-		"orders_placed_stock", // queue
-		"",                    // consumer
-		false,                 // auto-ack
-		false,                 // exclusive
-		false,                 // no-local
-		false,                 // no-wait
-		nil,                   // args
+		"order_placed_stock",          // queue
+		"stock-order-placed-consumer", // consumer tag
+		false,                         // auto-ack
+		false,                         // exclusive
+		false,                         // no-local
+		false,                         // no-wait
+		nil,                           // args
 	)
 	if err != nil {
+		log.Printf("OrderPlacedConsumer: Failed to start consuming: %v", err)
 		return err
 	}
 
-	log.Println("OrderPlacedConsumer: Waiting for orders_placed messages...")
+	log.Println("OrderPlacedConsumer: Successfully started, waiting for order_placed messages...")
 
 	go func() {
 		for {
@@ -143,11 +152,13 @@ func (c *OrderPlacedConsumer) StartConsuming(ctx context.Context) error {
 }
 
 func (c *OrderPlacedConsumer) handleMessage(ctx context.Context, msg amqp091.Delivery) error {
-	var orderMsg OrderPlacedMessage
-	if err := json.Unmarshal(msg.Body, &orderMsg); err != nil {
+	var wrapper OrderPlacedMessageWrapper
+	if err := json.Unmarshal(msg.Body, &wrapper); err != nil {
+		log.Printf("OrderPlacedConsumer: Failed to unmarshal message: %v", err)
 		return err
 	}
 
+	orderMsg := wrapper.Message
 	log.Printf("OrderPlacedConsumer: Processing order placed: %s with %d items", orderMsg.OrderID, len(orderMsg.Articles))
 
 	// Array para recopilar artículos con stock insuficiente
