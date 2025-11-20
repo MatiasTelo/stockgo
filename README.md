@@ -325,8 +325,12 @@ Servicio disponible en: `http://localhost:8080`
 
 ## 🐰 Interfaz Asíncrona (RabbitMQ)
 
-### Exchange Principal
-**Exchange**: `ecommerce` (tipo: topic)
+### Exchanges Configurados
+El servicio consume mensajes de **exchanges tipo fanout** para cada tipo de evento:
+
+- **`orders_placed`** (tipo: fanout) - Para órdenes creadas
+- **`orders_confirmed`** (tipo: fanout) - Para órdenes confirmadas
+- **`orders_canceled`** (tipo: fanout) - Para órdenes canceladas
 
 ---
 
@@ -334,8 +338,9 @@ Servicio disponible en: `http://localhost:8080`
 
 #### 1. Procesamiento de Orden Creada
 - **Consumer**: OrderPlacedConsumer
-- **Queue**: `stock.order.placed`
-- **Routing Key**: `order_placed`
+- **Exchange**: `orders_placed` (fanout)
+- **Queue**: `orders_placed_stock`
+- **Routing Key**: `` (vacío, fanout no usa routing keys)
 
 **Body del mensaje**:
 ```json
@@ -358,8 +363,9 @@ Servicio disponible en: `http://localhost:8080`
 
 #### 2. Procesamiento de Orden Confirmada
 - **Consumer**: OrderConfirmedConsumer
-- **Queue**: `stock.order.confirmed`
-- **Routing Key**: `order_confirmed`
+- **Exchange**: `orders_confirmed` (fanout)
+- **Queue**: `orders_confirmed_stock`
+- **Routing Key**: `` (vacío, fanout no usa routing keys)
 
 **Body del mensaje**:
 ```json
@@ -379,8 +385,9 @@ Servicio disponible en: `http://localhost:8080`
 
 #### 3. Procesamiento de Orden Cancelada
 - **Consumer**: OrderCanceledConsumer
-- **Queue**: `stock.order.canceled`
-- **Routing Key**: `order_canceled`
+- **Exchange**: `orders_canceled` (fanout)
+- **Queue**: `orders_canceled_stock`
+- **Routing Key**: `` (vacío, fanout no usa routing keys)
 
 **Body del mensaje**:
 ```json

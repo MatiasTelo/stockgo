@@ -46,15 +46,15 @@ func NewOrderConfirmedConsumer(stockService *service.StockService, conn *amqp091
 }
 
 func (c *OrderConfirmedConsumer) setupQueue() error {
-	// Declarar exchange
+	// Declarar exchange fanout
 	err := c.channel.ExchangeDeclare(
-		"ecommerce", // name
-		"topic",     // type
-		true,        // durable
-		false,       // auto-deleted
-		false,       // internal
-		false,       // no-wait
-		nil,         // arguments
+		"orders_confirmed", // nombre del exchange
+		"fanout",           // tipo fanout
+		true,               // durable
+		false,              // auto-deleted
+		false,              // internal
+		false,              // no-wait
+		nil,                // arguments
 	)
 	if err != nil {
 		return err
@@ -62,22 +62,22 @@ func (c *OrderConfirmedConsumer) setupQueue() error {
 
 	// Declarar cola
 	queue, err := c.channel.QueueDeclare(
-		"stock.order.confirmed", // name
-		true,                    // durable
-		false,                   // delete when unused
-		false,                   // exclusive
-		false,                   // no-wait
-		nil,                     // arguments
+		"orders_confirmed_stock", // nombre único para stock service
+		true,                     // durable
+		false,                    // delete when unused
+		false,                    // exclusive
+		false,                    // no-wait
+		nil,                      // arguments
 	)
 	if err != nil {
 		return err
 	}
 
-	// Bind cola al exchange
+	// Bind cola al exchange (routing key vacío para fanout)
 	return c.channel.QueueBind(
-		queue.Name,        // queue name
-		"order.confirmed", // routing key
-		"ecommerce",       // exchange
+		queue.Name,         // queue name
+		"",                 // routing key vacío para fanout
+		"orders_confirmed", // exchange
 		false,
 		nil,
 	)
@@ -86,19 +86,19 @@ func (c *OrderConfirmedConsumer) setupQueue() error {
 // StartConsuming inicia el consumo de mensajes
 func (c *OrderConfirmedConsumer) StartConsuming(ctx context.Context) error {
 	msgs, err := c.channel.Consume(
-		"stock.order.confirmed", // queue
-		"",                      // consumer
-		false,                   // auto-ack
-		false,                   // exclusive
-		false,                   // no-local
-		false,                   // no-wait
-		nil,                     // args
+		"orders_confirmed_stock", // queue
+		"",                       // consumer
+		false,                    // auto-ack
+		false,                    // exclusive
+		false,                    // no-local
+		false,                    // no-wait
+		nil,                      // args
 	)
 	if err != nil {
 		return err
 	}
 
-	log.Println("OrderConfirmedConsumer: Starting to consume order.confirmed messages")
+	log.Println("OrderConfirmedConsumer: Waiting for orders_confirmed messages...")
 
 	go func() {
 		for {

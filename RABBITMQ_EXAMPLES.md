@@ -2,17 +2,18 @@
 
 ## Configuración de RabbitMQ
 
-**Exchange:** `ecommerce`  
-**Tipo:** `topic`  
-**Colas y Routing Keys:**
-- `stock.order.placed` → routing key: `order_placed`
-- `stock.order.confirmed` → routing key: `order_confirmed`  
-- `stock.order.canceled` → routing key: `order_canceled`
+**Exchanges:** Tipo `fanout` (cada evento tiene su propio exchange)
+- `orders_placed` → Cola: `orders_placed_stock`
+- `orders_confirmed` → Cola: `orders_confirmed_stock`
+- `orders_canceled` → Cola: `orders_canceled_stock`
+
+**Nota:** Los exchanges tipo **fanout** no usan routing keys, envían mensajes a todas las colas vinculadas.
 
 ## 1. Mensaje de Orden Creada (order_placed)
 
-**Routing Key:** `order_placed`  
-**Cola:** `stock.order.placed`
+**Exchange:** `orders_placed` (fanout)  
+**Cola:** `orders_placed_stock`  
+**Routing Key:** (no requerido para fanout)
 
 ```json
 {
@@ -34,8 +35,9 @@
 
 ## 2. Mensaje de Orden Confirmada (order_confirmed)
 
-**Routing Key:** `order.confirmed`  
-**Cola:** `stock.order.confirmed`
+**Exchange:** `orders_confirmed` (fanout)  
+**Cola:** `orders_confirmed_stock`  
+**Routing Key:** (no requerido para fanout)
 
 ```json
 {
@@ -58,8 +60,9 @@
 
 ## 3. Mensaje de Orden Cancelada (order_canceled)
 
-**Routing Key:** `order.canceled`  
-**Cola:** `stock.order.canceled`
+**Exchange:** `orders_canceled` (fanout)  
+**Cola:** `orders_canceled_stock`  
+**Routing Key:** (no requerido para fanout)
 
 ```json
 {
@@ -83,26 +86,26 @@
 
 ## 4. Comandos para enviar mensajes usando RabbitMQ Management o CLI
 
-### Usando rabbitmqctl (desde línea de comandos)
+### Usando rabbitmqadmin (recomendado para fanout)
 
 ```bash
 # Publicar orden creada
-rabbitmqctl publish_message ecommerce order_placed '{"orderId":"ORD-001","cartId":"CART-123","userId":"USER-456","articles":[{"articleId":"ART-001","quantity":2},{"articleId":"ART-002","quantity":1}]}'
+rabbitmqadmin publish exchange=orders_placed payload='{"orderId":"ORD-001","cartId":"CART-123","userId":"USER-456","articles":[{"articleId":"ART-001","quantity":2},{"articleId":"ART-002","quantity":1}]}'
 
 # Publicar orden confirmada  
-rabbitmqctl publish_message ecommerce order_confirmed '{"orderId":"ORD-001","cartId":"CART-123","userId":"USER-456","articles":[{"articleId":"ART-001","quantity":2},{"articleId":"ART-002","quantity":1}],"confirmed_at":"2025-10-13T18:30:00Z"}'
+rabbitmqadmin publish exchange=orders_confirmed payload='{"orderId":"ORD-001","cartId":"CART-123","userId":"USER-456","articles":[{"articleId":"ART-001","quantity":2},{"articleId":"ART-002","quantity":1}],"confirmed_at":"2025-10-13T18:30:00Z"}'
 
 # Publicar orden cancelada
-rabbitmqctl publish_message ecommerce order_canceled '{"orderId":"ORD-001","cartId":"CART-123","userId":"USER-456","articles":[{"articleId":"ART-001","quantity":2},{"articleId":"ART-002","quantity":1}],"canceled_at":"2025-10-13T18:35:00Z","reason":"Payment failed"}'
+rabbitmqadmin publish exchange=orders_canceled payload='{"orderId":"ORD-001","cartId":"CART-123","userId":"USER-456","articles":[{"articleId":"ART-001","quantity":2},{"articleId":"ART-002","quantity":1}],"canceled_at":"2025-10-13T18:35:00Z","reason":"Payment failed"}'
 ```
 
 ### Usando RabbitMQ Management Web UI
 
 1. Ir a http://localhost:15672 (usuario: guest, password: guest)
 2. Ir a "Exchanges"
-3. Hacer click en "ecommerce" 
+3. Hacer click en el exchange correspondiente (`orders_placed`, `orders_confirmed` o `orders_canceled`) 
 4. En "Publish message":
-   - **Routing key:** usar `order_placed`, `order_confirmed` o `order_canceled`
+   - **Routing key:** (dejar vacío, fanout no lo usa)
    - **Payload:** copiar el JSON del ejemplo
    - Hacer click en "Publish message"
 
@@ -178,9 +181,9 @@ curl http://localhost:8080/low-stock
 
 Cuando funcione correctamente verás logs como:
 ```
-OrderPlacedConsumer: Starting to consume order.placed messages
-OrderConfirmedConsumer: Starting to consume order.confirmed messages  
-OrderCanceledConsumer: Starting to consume order.canceled messages
+OrderPlacedConsumer: Waiting for orders_placed messages...
+OrderConfirmedConsumer: Waiting for orders_confirmed messages...
+OrderCanceledConsumer: Waiting for orders_canceled messages...
 OrderPlacedConsumer: Successfully reserved 2 units of article ART-001 for order ORD-001
 LowStockPublisher: Publishing low stock alert for article ART-001
 ```

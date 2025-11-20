@@ -47,15 +47,15 @@ func NewOrderCanceledConsumer(stockService *service.StockService, conn *amqp091.
 }
 
 func (c *OrderCanceledConsumer) setupQueue() error {
-	// Declarar exchange
+	// Declarar exchange fanout
 	err := c.channel.ExchangeDeclare(
-		"ecommerce", // name
-		"topic",     // type
-		true,        // durable
-		false,       // auto-deleted
-		false,       // internal
-		false,       // no-wait
-		nil,         // arguments
+		"orders_canceled", // nombre del exchange
+		"fanout",          // tipo fanout
+		true,              // durable
+		false,             // auto-deleted
+		false,             // internal
+		false,             // no-wait
+		nil,               // arguments
 	)
 	if err != nil {
 		return err
@@ -63,22 +63,22 @@ func (c *OrderCanceledConsumer) setupQueue() error {
 
 	// Declarar cola
 	queue, err := c.channel.QueueDeclare(
-		"stock.order.canceled", // name
-		true,                   // durable
-		false,                  // delete when unused
-		false,                  // exclusive
-		false,                  // no-wait
-		nil,                    // arguments
+		"orders_canceled_stock", // nombre único para stock service
+		true,                    // durable
+		false,                   // delete when unused
+		false,                   // exclusive
+		false,                   // no-wait
+		nil,                     // arguments
 	)
 	if err != nil {
 		return err
 	}
 
-	// Bind cola al exchange
+	// Bind cola al exchange (routing key vacío para fanout)
 	return c.channel.QueueBind(
-		queue.Name,       // queue name
-		"order.canceled", // routing key
-		"ecommerce",      // exchange
+		queue.Name,        // queue name
+		"",                // routing key vacío para fanout
+		"orders_canceled", // exchange
 		false,
 		nil,
 	)
@@ -87,19 +87,19 @@ func (c *OrderCanceledConsumer) setupQueue() error {
 // StartConsuming inicia el consumo de mensajes
 func (c *OrderCanceledConsumer) StartConsuming(ctx context.Context) error {
 	msgs, err := c.channel.Consume(
-		"stock.order.canceled", // queue
-		"",                     // consumer
-		false,                  // auto-ack
-		false,                  // exclusive
-		false,                  // no-local
-		false,                  // no-wait
-		nil,                    // args
+		"orders_canceled_stock", // queue
+		"",                      // consumer
+		false,                   // auto-ack
+		false,                   // exclusive
+		false,                   // no-local
+		false,                   // no-wait
+		nil,                     // args
 	)
 	if err != nil {
 		return err
 	}
 
-	log.Println("OrderCanceledConsumer: Starting to consume order.canceled messages")
+	log.Println("OrderCanceledConsumer: Waiting for orders_canceled messages...")
 
 	go func() {
 		for {
